@@ -1,18 +1,21 @@
 import os
 import json
-from typing import Optional
+from typing import Optional, List, Dict
 from google import genai
 from opik import track, opik_context
 from models import ImpactQuest, Coordinates, ResolutionCategory, Difficulty
+from location_service import LocationService
 
 class CommunityArchitect:
     """
     AI Agent that generates location-aware community impact quests
     using Google Gemini 2.5 Pro with structured JSON output
+    
+    Now powered by Google Maps APIs for real-world location accuracy
     """
     
     def __init__(self):
-        """Initialize the Gemini client"""
+        """Initialize the Gemini client and LocationService"""
         # Get API key from environment variable
         api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:
@@ -21,28 +24,37 @@ class CommunityArchitect:
         # Initialize Gemini client (uses GEMINI_API_KEY env var automatically)
         self.client = genai.Client()
         self.model = "gemini-2.5-pro"  # Using latest model
+        
+        # Initialize LocationService for Google Maps integration
+        self.location_service = LocationService()
+        print("✅ CommunityArchitect initialized with LocationService")
     
     @track(
-        name="generate_community_quest",
+        name="generate_location_aware_quest",
         project_name="CommuPath",
-        tags=["quest-generation", "gemini-2.5-pro"]
+        tags=["quest-generation", "gemini-2.5-pro", "google-maps"]
     )
     async def generate_quest(
         self,
         coordinates: Coordinates,
         resolution_category: ResolutionCategory,
         user_preferences: Optional[str] = None
-    ) -> ImpactQuest:
+    ) -> Dict:
         """
-        Generate a location-specific community impact quest
+        Generate a location-specific community impact quest using Google Maps + AI
+        
+        Process:
+        1. Find real nearby places using Google Maps Places API
+        2. AI selects best location and generates tailored quest
+        3. Return quest with exact coordinates of chosen location
         
         Args:
-            coordinates: GPS coordinates for quest location
-            resolution_category: Category of the resolution/quest
-            user_preferences: Optional user preferences
+            coordinates: GPS coordinates (user's click on map)
+            resolution_category: Category of quest
+            user_preferences: Optional user input
             
         Returns:
-            ImpactQuest: Generated quest with all details
+            Dict with quest data AND location metadata (name, address)
         """
         
         # Set metadata for Opik tracking
@@ -56,15 +68,201 @@ class CommunityArchitect:
                 }
             )
         
-        # Build the prompt with location context
-        prompt = self._build_prompt(coordinates, resolution_category, user_preferences)
+        print(f"\n🔍 STEP 1: Finding nearby {resolution_category.value} locations...")
+        print(f"   Search center: ({coordinates.lat:.4f}, {coordinates.lng:.4f})")
         
-        print(f"🤖 Calling Gemini API with model: {self.model}")
-        print(f"   Location: {self._get_location_name(coordinates)}")
-        print(f"   Category: {resolution_category.value}")
+        # STEP 1: Find real nearby places using Google Maps
+        try:
+            nearby_places = await self.location_service.find_nearby_places(
+                center_coords=coordinates,
+                category=resolution_category.value,
+                radius=3000,  # 3km search radius
+                max_results=5
+            )
+            
+            if nearby_places:
+                print(f"   ✅ Found {len(nearby_places)} nearby locations")
+                for i, place in enumerate(nearby_places[:3]):
+                    print(f"      {i+1}. {place['name']} (rating: {place.get('rating', 'N/A')})")
+            else:
+                print(f"   ⚠️  No nearby places found, using fallback generation")
+                
+        except Exception as e:
+            print(f"   ❌ Error finding nearby places: {e}")
+            nearby_places = []
+        
+        # STEP 2: If no places found, use traditional generation
+        if not nearby_places:
+            return await self._generate_quest_traditional(
+                coordinates,
+                resolution_category,
+                user_preferences
+            )
+        
+        # STEP 3: Rank places by quality score
+        ranked_places = sorted(
+            nearby_places,
+            key=lambda p: self.location_service.calculate_place_quality_score(p),
+            reverse=True
+        )
+        
+        print(f"\n🤖 STEP 2: Generating quest with AI...")
+        print(f"   Providing AI with {len(ranked_places[:3])} location options")
+        
+        # STEP 4: Build location-aware prompt
+        prompt = self._build_location_aware_prompt(
+            places=ranked_places[:3],  # Top 3 locations
+            category=resolution_category,
+            user_preferences=user_preferences
+        )
         
         try:
-            # Generate content with structured JSON output
+            # STEP 5: AI selects location and generates quest
+            response = self.client.models.generate_content(
+                model=self.model,
+                contents=prompt,
+                config=genai.types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema={
+                        "type": "object",
+                        "properties": {
+                            "selected_location_index": {"type": "integer", "description": "Index of chosen location (0-2)"},
+                            "title": {"type": "string"},
+                            "description": {"type": "string"},
+                            "difficulty": {"type": "string", "enum": ["Easy", "Medium", "Hard"]},
+                            "impact_metric": {"type": "string"},
+                            "estimated_time": {"type": "string"},
+                            "community_benefit": {"type": "string"}
+                        },
+                        "required": ["selected_location_index", "title", "description", "difficulty", "impact_metric"]
+                    }
+                )
+            )
+            
+            quest_data = json.loads(response.text)
+            
+            # STEP 6: Get AI-selected location
+            selected_index = quest_data.get("selected_location_index", 0)
+            selected_index = max(0, min(selected_index, len(ranked_places) - 1))  # Bounds check
+            selected_place = ranked_places[selected_index]
+            
+            print(f"   ✅ AI selected: {selected_place['name']}")
+            print(f"   📍 Coordinates: ({selected_place['coordinates'].lat:.4f}, {selected_place['coordinates'].lng:.4f})")
+            
+            # STEP 7: Create quest with exact location
+            import uuid
+            quest_id = f"quest_{uuid.uuid4().hex[:8]}"
+            
+            quest = ImpactQuest(
+                quest_id=quest_id,
+                title=quest_data["title"],
+                description=quest_data["description"],
+                difficulty=Difficulty(quest_data["difficulty"]),
+                impact_metric=quest_data["impact_metric"],
+                location=selected_place["coordinates"],  # EXACT COORDINATES FROM GOOGLE MAPS
+                category=resolution_category,
+                estimated_time=quest_data.get("estimated_time"),
+                community_benefit=quest_data.get("community_benefit")
+            )
+            
+            # Log to Opik
+            if opik_context.get_current_span_data():
+                opik_context.update_current_span(
+                    output=quest.model_dump(),
+                    metadata={
+                        "quest_id": quest_id,
+                        "location_name": selected_place["name"],
+                        "location_address": selected_place.get("address"),
+                        "gemini_model": self.model,
+                        "google_maps_used": True
+                    }
+                )
+            
+            # Return quest WITH location metadata
+            return {
+                "quest": quest,
+                "location_name": selected_place["name"],
+                "location_address": selected_place.get("address", ""),
+                "place_id": selected_place.get("place_id")
+            }
+            
+        except Exception as e:
+            print(f"   ❌ Error in AI generation: {e}")
+            import traceback
+            traceback.print_exc()
+            
+            # Fallback to traditional generation
+            return await self._generate_quest_traditional(
+                coordinates,
+                resolution_category,
+                user_preferences
+            )
+    
+    def _build_location_aware_prompt(
+        self,
+        places: List[Dict],
+        category: ResolutionCategory,
+        user_preferences: Optional[str]
+    ) -> str:
+        """Build prompt with specific nearby locations for AI to choose from"""
+        
+        # Format places list for AI
+        places_description = "\n".join([
+            f"{i}. **{place['name']}**"
+            f"\n   - Address: {place.get('address', 'Address unavailable')}"
+            f"\n   - Rating: {place.get('rating', 'N/A')}/5.0 ({place.get('user_ratings_total', 0)} reviews)"
+            f"\n   - Types: {', '.join(place.get('types', [])[:3])}"
+            for i, place in enumerate(places)
+        ])
+        
+        prompt = f"""You are the Community Architect AI, an expert at creating location-specific community impact quests.
+
+**Available Real Locations** (from Google Maps):
+{places_description}
+
+**Task**: Generate a community impact quest
+**Category**: {category.value}
+**User Preferences**: {user_preferences or "None specified"}
+
+**Instructions**:
+1. SELECT ONE location from the list above (index 0, 1, or 2)
+2. Create a quest SPECIFICALLY designed for that exact location
+3. Mention the location NAME in the title
+4. Make the quest actionable, measurable, and community-focused
+5. Ensure it addresses a real need in that specific place
+
+**Example Output**:
+{{
+  "selected_location_index": 0,
+  "title": "Bodija Market Community Health Screening Day",
+  "description": "Partner with Bodija Market traders association to organize free blood pressure and diabetes screening. Set up booths near the main entrance to reach maximum shoppers. Provide health education pamphlets in local languages.",
+  "difficulty": "Medium",
+  "impact_metric": "Screen 100+ market visitors for hypertension and diabetes",
+  "estimated_time": "Half day (4-5 hours)",
+  "community_benefit": "Early disease detection for 100+ community members, increased health awareness among traders"
+}}
+
+Generate a similar quest selecting the BEST location from the options above."""
+
+        return prompt
+    
+    async def _generate_quest_traditional(
+        self,
+        coordinates: Coordinates,
+        resolution_category: ResolutionCategory,
+        user_preferences: Optional[str]
+    ) -> Dict:
+        """
+        Traditional quest generation without Google Maps (fallback)
+        Used when Places API is unavailable or returns no results
+        """
+        
+        print(f"\n⚙️  Using traditional quest generation (no nearby places)")
+        
+        # Use original prompt builder
+        prompt = self._build_prompt(coordinates, resolution_category, user_preferences)
+        
+        try:
             response = self.client.models.generate_content(
                 model=self.model,
                 contents=prompt,
@@ -85,14 +283,11 @@ class CommunityArchitect:
                 )
             )
             
-            # Parse the JSON response
             quest_data = json.loads(response.text)
             
-            # Generate unique quest ID
             import uuid
             quest_id = f"quest_{uuid.uuid4().hex[:8]}"
             
-            # Create ImpactQuest object
             quest = ImpactQuest(
                 quest_id=quest_id,
                 title=quest_data["title"],
@@ -105,26 +300,29 @@ class CommunityArchitect:
                 community_benefit=quest_data.get("community_benefit")
             )
             
-            # Log to Opik with feedback scores
-            if opik_context.get_current_span_data():
-                opik_context.update_current_span(
-                    output=quest.model_dump(),  # Use dict, not JSON string
-                    metadata={
-                        "quest_id": quest_id,
-                        "location_name": self._get_location_name(coordinates),
-                        "gemini_model": self.model
-                    }
-                )
+            # Try to get location name from geocoding
+            location_name = self.location_service.reverse_geocode(
+                coordinates.lat,
+                coordinates.lng
+            )
             
-            return quest
+            return {
+                "quest": quest,
+                "location_name": location_name or "Ibadan, Nigeria",
+                "location_address": "",
+                "place_id": None
+            }
             
         except Exception as e:
-            # Fallback: return a generic quest if API fails
-            print(f"❌ Error generating quest with Gemini: {e}")
-            print(f"   Error type: {type(e).__name__}")
-            import traceback
-            traceback.print_exc()
-            return self._generate_fallback_quest(coordinates, resolution_category)
+            print(f"❌ Traditional generation also failed: {e}")
+            # Final fallback - use hardcoded quest
+            fallback_quest = self._generate_fallback_quest(coordinates, resolution_category)
+            return {
+                "quest": fallback_quest,
+                "location_name": "Ibadan, Nigeria",
+                "location_address": "",
+                "place_id": None
+            }
     
     def _build_prompt(
         self,

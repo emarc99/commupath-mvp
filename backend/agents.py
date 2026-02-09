@@ -20,7 +20,7 @@ class CommunityArchitect:
         
         # Initialize Gemini client (uses GEMINI_API_KEY env var automatically)
         self.client = genai.Client()
-        self.model = "gemini-2.0-flash-exp"  # Using latest model
+        self.model = "gemini-2.5-pro"  # Using latest model
     
     @track(
         name="generate_community_quest",

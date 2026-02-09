@@ -1,5 +1,5 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
-import { MapPinIcon, ClipboardDocumentListIcon, TrophyIcon, ArrowRightOnRectangleIcon } from '@heroicons/react/24/outline';
+import { MapPinIcon, ClipboardDocumentListIcon, TrophyIcon, ArrowRightOnRectangleIcon, GlobeAltIcon, SparklesIcon } from '@heroicons/react/24/outline';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 
@@ -11,6 +11,8 @@ const Layout = () => {
     const navItems = [
         { to: '/map', icon: MapPinIcon, label: 'Impact Map', emoji: '📍' },
         { to: '/quests', icon: ClipboardDocumentListIcon, label: 'Quest Hub', emoji: '📋' },
+        { to: '/community', icon: GlobeAltIcon, label: 'Community Board', emoji: '🌍' },
+        { to: '/creator', icon: SparklesIcon, label: 'Creator Dashboard', emoji: '✨' },
         { to: '/leaderboard', icon: TrophyIcon, label: 'Leaderboard', emoji: '🏆' },
     ];
 

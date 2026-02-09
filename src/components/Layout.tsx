@@ -1,4 +1,4 @@
-import { Outlet, NavLink, useNavigate } from 'react-router-dom';
+import { Outlet, NavLink, useNavigate, Link } from 'react-router-dom';
 import { MapPinIcon, ClipboardDocumentListIcon, TrophyIcon, ArrowRightOnRectangleIcon, GlobeAltIcon, SparklesIcon } from '@heroicons/react/24/outline';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
@@ -26,8 +26,15 @@ const Layout = () => {
             {/* Sidebar */}
             <aside className="w-72 glass-dark border-r border-white/10 flex flex-col animate-slide-down">
                 {/* Logo */}
-                <div className="p-6 border-b border-white/10">
-                    <h1 className="text-3xl font-bold gradient-text mb-2">CommuPath</h1>
+                <div className="p-6 border-b border-white/10 flex flex-col items-center">
+                    {/* <h1 className="text-3xl font-bold gradient-text mb-2">CommuPath</h1> */}
+                     <Link to="/">
+                        <img 
+                        src="/src/assets/logo1.jpg"  
+                        alt="CommuPath" 
+                        className="w-40 mb-3 mx-auto"  
+                        />
+                    </Link>
                     <p className="text-gray-400 text-sm">Transforming Resolutions into Impact</p>
                 </div>
 

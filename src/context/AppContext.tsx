@@ -20,6 +20,8 @@ export interface Quest {
     location: {
         lat: number;
         lng: number;
+        name?: string;  // NEW: Location name from Google Maps
+        address?: string;  // NEW: Full address from Google Maps
     };
     status: 'Active' | 'In Progress' | 'Completed';
     category: 'Environment' | 'Social' | 'Education' | 'Health';

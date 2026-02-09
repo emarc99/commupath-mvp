@@ -63,3 +63,7 @@ class ImpactQuest(BaseModel):
                 "community_benefit": "Improved recreational space for 200+ families"
             }
         }
+
+class StatusUpdate(BaseModel):
+    """Model for updating quest status"""
+    status: str

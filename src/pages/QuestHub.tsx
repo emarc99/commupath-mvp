@@ -196,7 +196,7 @@ const QuestHub = () => {
                     <div className="glass rounded-xl p-12 text-center">
                         <p className="text-gray-400 text-lg">No {activeTab.toLowerCase()} quests yet</p>
                         <p className="text-gray-500 text-sm mt-2">
-                            {activeTab === 'Active' ? 'Generate a new quest from the Impact Map!' : 'Start working on an active quest!'}
+                            {activeTab === 'Active' ? 'Claim a new quest from the Community Marketplace!' : 'Start working on an active quest!'}
                         </p>
                     </div>
                 ) : (

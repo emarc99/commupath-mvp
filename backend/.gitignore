@@ -37,3 +37,13 @@ wheels/
 # OS
 .DS_Store
 Thumbs.db
+
+# Database
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+commupath.db
+
+# Uploads
+uploads/

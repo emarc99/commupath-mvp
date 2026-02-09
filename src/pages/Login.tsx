@@ -1,19 +1,43 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { MapPinIcon, EnvelopeIcon, UserIcon, ArrowRightIcon } from '@heroicons/react/24/outline';
+import { MapPinIcon, LockClosedIcon, UserIcon, ArrowRightIcon } from '@heroicons/react/24/outline';
+import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 
 const Login = () => {
-    const [email, setEmail] = useState('');
     const [username, setUsername] = useState('');
+    const [password, setPassword] = useState('');
+    const [error, setError] = useState('');
+    const [loading, setLoading] = useState(false);
     const navigate = useNavigate();
-    const { login } = useAuth();
+    const { login, isAuthenticated } = useAuth();
 
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (email && username) {
-            login(username, email);
+    // Redirect if already logged in
+    useEffect(() => {
+        if (isAuthenticated) {
             navigate('/map');
+        }
+    }, [isAuthenticated, navigate]);
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setError('');
+        setLoading(true);
+
+        try {
+            await login(username, password);
+            toast.success('Welcome back! 👋', {
+                description: `Logged in as ${username}`
+            });
+            navigate('/map');
+        } catch (err: any) {
+            const errorMsg = err.message || 'Login failed';
+            setError(errorMsg);
+            toast.error('Login failed', {
+                description: errorMsg
+            });
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -35,6 +59,12 @@ const Login = () => {
                 {/* Login Form */}
                 <div className="glass-dark rounded-2xl p-8 animate-slide-up">
                     <form onSubmit={handleSubmit} className="space-y-6">
+                        {error && (
+                            <div className="bg-red-500/20 border border-red-500/50 rounded-lg p-3 text-red-300 text-sm">
+                                {error}
+                            </div>
+                        )}
+
                         <div>
                             <label className="block text-sm font-medium mb-2 text-gray-300">
                                 Username
@@ -46,7 +76,8 @@ const Login = () => {
                                     onChange={(e) => setUsername(e.target.value)}
                                     placeholder="Enter your username"
                                     required
-                                    className="w-full px-4 py-3 pl-11 glass rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-white placeholder-gray-400"
+                                    disabled={loading}
+                                    className="w-full px-4 py-3 pl-11 glass rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-white placeholder-gray-400 disabled:opacity-50"
                                 />
                                 <UserIcon className="w-5 h-5 absolute left-3 top-3.5 text-gray-400" />
                             </div>
@@ -54,27 +85,30 @@ const Login = () => {
 
                         <div>
                             <label className="block text-sm font-medium mb-2 text-gray-300">
-                                Email
+                                Password
                             </label>
                             <div className="relative">
                                 <input
-                                    type="email"
-                                    value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
-                                    placeholder="Enter your email"
+                                    type="password"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    placeholder="Enter your password"
                                     required
-                                    className="w-full px-4 py-3 pl-11 glass rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-white placeholder-gray-400"
+                                    minLength={6}
+                                    disabled={loading}
+                                    className="w-full px-4 py-3 pl-11 glass rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-white placeholder-gray-400 disabled:opacity-50"
                                 />
-                                <EnvelopeIcon className="w-5 h-5 absolute left-3 top-3.5 text-gray-400" />
+                                <LockClosedIcon className="w-5 h-5 absolute left-3 top-3.5 text-gray-400" />
                             </div>
                         </div>
 
                         <button
                             type="submit"
-                            className="w-full px-6 py-4 bg-gradient-to-r from-primary-500 to-accent-500 hover:from-primary-600 hover:to-accent-600 rounded-lg font-bold transition-all duration-300 shadow-lg hover:shadow-2xl transform hover:scale-105 flex items-center justify-center space-x-2"
+                            disabled={loading}
+                            className="w-full px-6 py-4 bg-gradient-to-r from-primary-500 to-accent-500 hover:from-primary-600 hover:to-accent-600 rounded-lg font-bold transition-all duration-300 shadow-lg hover:shadow-2xl transform hover:scale-105 flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
                         >
-                            <span>Sign In</span>
-                            <ArrowRightIcon className="w-5 h-5" />
+                            <span>{loading ? 'Signing In...' : 'Sign In'}</span>
+                            {!loading && <ArrowRightIcon className="w-5 h-5" />}
                         </button>
                     </form>
 
@@ -96,7 +130,7 @@ const Login = () => {
 
                 {/* Info Message */}
                 <div className="mt-6 glass rounded-lg p-4 text-sm text-gray-400 text-center">
-                    💡 Tip: Since we're in demo mode, just enter any username and email to get started!
+                    💡 Tip: Enter your registered username<br />and password to get started!
                 </div>
             </div>
         </div>

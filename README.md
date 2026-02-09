@@ -120,13 +120,13 @@ commupath/
 - Quest generation API
 - Connect frontend to backend
 
-### 📊 Milestone 2: Opik Instrumentation (Next)
+### 📊 Milestone 2: Opik Instrumentation (In progress)
 - Opik SDK integration
 - `@track` decorators for tracing
 - LLM-as-a-judge for safety evaluation
 - Observability dashboard
 
-### 👁️ Milestone 3: Multimodal Verification
+### 👁️ Milestone 3: Multimodal Verification (Next)
 - Gemini 2.5 Pro Vision integration
 - Image-based proof verification
 - Confidence scoring
@@ -159,7 +159,7 @@ OPIK_URL_OVERRIDE=https://www.comet.com/opik/api
 - [ ] View quest details in popups
 - [ ] Check leaderboard animations
 
-### Automated Tests (Coming Soon)
+### Automated Tests (welcome Soon)
 - Component tests with Vitest
 - E2E tests with Playwright
 - API tests for backend endpoints
@@ -185,7 +185,7 @@ npm run lint
 
 ## 🤝 Contributing
 
-Contributions, suggestions, and feedback are welcome!
+Contributions, suggestions, and feedback are always welcomee!
 
 ## 📄 License
 

@@ -1,16 +1,38 @@
-import { useState } from 'react';
-import { useApp } from '../context/AppContext';
+import { useState, useEffect } from 'react';
+import { toast } from 'sonner';
+import { apiClient } from '../context/AuthContext';
 import { CloudArrowUpIcon, CheckCircleIcon, ClockIcon } from '@heroicons/react/24/outline';
 import type { Quest } from '../context/AppContext';
 
 const QuestHub = () => {
-    const { quests, updateQuestStatus, addPoints } = useApp();
+    const [quests, setQuests] = useState<Quest[]>([]);
+    const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'Active' | 'In Progress' | 'Completed'>('Active');
     const [selectedQuest, setSelectedQuest] = useState<Quest | null>(null);
     const [proofImage, setProofImage] = useState<File | null>(null);
     const [proofText, setProofText] = useState('');
     const [imagePreview, setImagePreview] = useState<string | null>(null);
     const [isVerifying, setIsVerifying] = useState(false);
+
+    // Fetch quests from backend
+    useEffect(() => {
+        fetchQuests();
+    }, []);
+
+    const fetchQuests = async () => {
+        try {
+            setLoading(true);
+            const response = await apiClient.get('/api/quests/my');
+            setQuests(response.data);
+        } catch (error) {
+            console.error('Error fetching quests:', error);
+            toast.error('Failed to load quests', {
+                description: 'Please try refreshing the page'
+            });
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const filteredQuests = quests.filter(q => q.status === activeTab);
 
@@ -27,25 +49,95 @@ const QuestHub = () => {
     };
 
     const handleSubmitProof = async () => {
-        if (!selectedQuest) return;
+        if (!selectedQuest || !proofImage) {
+            toast.error('Missing required information', {
+                description: 'Please select an image to upload'
+            });
+            return;
+        }
 
         setIsVerifying(true);
+        const toastId = toast.loading('Verifying with AI...', {
+            description: 'Analyzing your proof of completion'
+        });
 
-        // TODO: Replace with actual API call in Milestone 3
-        // Simulate verification
-        setTimeout(() => {
-            const pointsAwarded = selectedQuest.difficulty === 'Easy' ? 50 :
-                selectedQuest.difficulty === 'Medium' ? 100 : 150;
+        try {
+            // Create form data for image upload
+            const formData = new FormData();
+            formData.append('quest_id', selectedQuest.quest_id);
+            formData.append('image', proofImage);
+            formData.append('description', proofText || 'Quest completion proof');
 
-            updateQuestStatus(selectedQuest.quest_id, 'Completed');
-            addPoints(pointsAwarded);
-            setIsVerifying(false);
+            // Call the vision verification API
+            const response = await apiClient.post('/api/verify-quest-proof', formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data',
+                },
+            });
+
+            const result = response.data;
+
+            // Update local quest status
+            setQuests(prevQuests =>
+                prevQuests.map(q =>
+                    q.quest_id === selectedQuest.quest_id
+                        ? { ...q, status: result.verification_result === 'Verified' ? 'Completed' : 'In Progress' }
+                        : q
+                )
+            );
+
+            // Clear form
             setSelectedQuest(null);
             setProofImage(null);
             setProofText('');
             setImagePreview(null);
-            alert(`Quest verified! You earned ${pointsAwarded} points! 🎉`);
-        }, 3000);
+
+            // Show result
+            if (result.verification_result === 'Verified') {
+                toast.success(`Quest verified! 🎉`, {
+                    id: toastId,
+                    description: `You earned ${result.suggested_points} points! Confidence: ${(result.confidence_score * 100).toFixed(0)}%`
+                });
+            } else {
+                toast.warning('Verification inconclusive', {
+                    id: toastId,
+                    description: result.reasoning || 'Please try submitting clearer proof'
+                });
+            }
+        } catch (error: any) {
+            console.error('Error verifying quest:', error);
+            toast.error('Verification failed', {
+                id: toastId,
+                description: error.response?.data?.detail || 'Please try again later'
+            });
+        } finally {
+            setIsVerifying(false);
+        }
+    };
+
+    const updateQuestStatus = async (quest_id: string, newStatus: 'Active' | 'In Progress' | 'Completed') => {
+        try {
+            // Update backend
+            await apiClient.put(`/api/quests/${quest_id}/status`, {
+                status: newStatus
+            });
+
+            // Update local state
+            setQuests(prevQuests =>
+                prevQuests.map(q =>
+                    q.quest_id === quest_id ? { ...q, status: newStatus } : q
+                )
+            );
+
+            toast.success('Quest status updated', {
+                description: `Quest is now ${newStatus}`
+            });
+        } catch (error) {
+            console.error('Error updating quest status:', error);
+            toast.error('Failed to update status', {
+                description: 'Please try again'
+            });
+        }
     };
 
     const getDifficultyColor = (difficulty: string) => {
@@ -83,8 +175,8 @@ const QuestHub = () => {
                             key={tab}
                             onClick={() => setActiveTab(tab)}
                             className={`flex-1 px-4 py-2 rounded-md font-medium transition-all duration-300 ${activeTab === tab
-                                    ? 'bg-gradient-to-r from-primary-500 to-accent-500 text-white'
-                                    : 'text-gray-400 hover:text-white'
+                                ? 'bg-gradient-to-r from-primary-500 to-accent-500 text-white'
+                                : 'text-gray-400 hover:text-white'
                                 }`}
                         >
                             {tab}
@@ -95,7 +187,12 @@ const QuestHub = () => {
 
             {/* Quest Grid */}
             <div className="flex-1 overflow-auto px-6 pb-6">
-                {filteredQuests.length === 0 ? (
+                {loading ? (
+                    <div className="glass rounded-xl p-12 text-center">
+                        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary-500 mx-auto mb-4"></div>
+                        <p className="text-gray-400">Loading quests...</p>
+                    </div>
+                ) : filteredQuests.length === 0 ? (
                     <div className="glass rounded-xl p-12 text-center">
                         <p className="text-gray-400 text-lg">No {activeTab.toLowerCase()} quests yet</p>
                         <p className="text-gray-500 text-sm mt-2">

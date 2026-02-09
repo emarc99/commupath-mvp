@@ -67,6 +67,8 @@ class Quest(Base):
     # Location
     location_lat = Column(Float, nullable=False)
     location_lng = Column(Float, nullable=False)
+    location_name = Column(String(255), nullable=True)  # e.g., "Bodija Market"
+    location_address = Column(String(500), nullable=True)  # Full address
     
     # Status: Active, In Progress, Completed
     status = Column(String(20), default="Active")
@@ -92,7 +94,9 @@ class Quest(Base):
             "community_benefit": self.community_benefit,
             "location": {
                 "lat": self.location_lat,
-                "lng": self.location_lng
+                "lng": self.location_lng,
+                "name": self.location_name,  # NEW
+                "address": self.location_address  # NEW
             },
             "status": self.status,
             "created_by": self.created_by,

@@ -8,7 +8,7 @@ import os
 import opik
 from contextlib import asynccontextmanager
 
-from models import QuestRequest, ImpactQuest
+from models import QuestRequest, ImpactQuest, StatusUpdate
 from agents import CommunityArchitect
 from evaluators import SafetyEvaluator, AppropriatenessEvaluator
 from vision_agent import VisionVerifier
@@ -227,16 +227,26 @@ async def generate_quest(
 ):
     """
     Generate a community impact quest using AI and save to database
+    Now powered by Google Maps for accurate location data
     """
     try:
-        # Generate quest with AI
-        quest = await architect.generate_quest(
+        # Generate quest with AI (returns Dict with quest + location metadata)
+        result = await architect.generate_quest(
             coordinates=request.coordinates,
             resolution_category=request.resolution_category,
             user_preferences=request.user_preferences
         )
         
-        # Save to database
+        # Extract quest and location data
+        quest = result["quest"]
+        location_name = result.get("location_name")
+        location_address = result.get("location_address")
+        
+        print(f"✅ Quest generated: {quest.title}")
+        if location_name:
+            print(f"   📍 Location: {location_name}")
+        
+        # Save to database with location metadata
         db_quest = await crud.create_quest(
             db=db,
             quest_id=quest.quest_id,
@@ -250,7 +260,9 @@ async def generate_quest(
             estimated_time=quest.estimated_time,
             community_benefit=quest.community_benefit,
             created_by=current_user.id,
-            assigned_to=None if request.make_public else current_user.id
+            assigned_to=None if request.make_public else current_user.id,
+            location_name=location_name,  # NEW
+            location_address=location_address  # NEW
         )
         
         print(f"✅ Quest saved to database: {quest.quest_id}")
@@ -258,6 +270,9 @@ async def generate_quest(
         return quest
         
     except Exception as e:
+        print(f"❌ Quest generation error: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(
             status_code=500,
             detail=f"Failed to generate quest: {str(e)}"
@@ -337,11 +352,15 @@ async def get_quest(
 @app.put("/api/quests/{quest_id}/status")
 async def update_quest_status(
     quest_id: str,
-    new_status: str,
+    update_data: dict,
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Update quest status (Active, In Progress, Completed)"""
+    new_status = update_data.get("status")
+    if not new_status:
+        raise HTTPException(status_code=422, detail="Status is required in request body")
+        
     quest = await crud.update_quest_status(
         db, quest_id, new_status, assigned_to=current_user.id
     )
@@ -369,7 +388,7 @@ async def claim_quest(
     
     # Assign quest to current user
     quest.assigned_to = current_user.id
-    quest.status = "In Progress"
+    quest.status = "Active"
     await db.commit()
     await db.refresh(quest)
     

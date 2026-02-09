@@ -6,6 +6,7 @@ pydantic-settings==2.12.0
 python-dotenv==1.2.1
 python-multipart==0.0.22
 opik==1.9.98
+googlemaps>=4.10.0  # Google Maps APIs (Places, Geocoding)
 
 pillow>=10.0.0
 python-magic-bin>=0.4.14  # Windows compatible

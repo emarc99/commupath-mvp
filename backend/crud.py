@@ -112,13 +112,17 @@ async def create_quest(
     estimated_time: Optional[str] = None,
     community_benefit: Optional[str] = None,
     created_by: Optional[str] = None,
-    assigned_to: Optional[str] = None
+    assigned_to: Optional[str] = None,
+    location_name: Optional[str] = None,  # NEW: e.g., "Bodija Market"
+    location_address: Optional[str] = None  # NEW: Full address
 ) -> Quest:
     """Create a new quest
     
     Args:
         assigned_to: If None, quest is public (community board)
                      If user_id, quest is private/assigned
+        location_name: Human-readable location name (from Google Maps)
+        location_address: Full address (from Google Maps)
     """
     # No auto-assignment - let caller explicitly control assigned_to
     # assigned_to=None means public quest (community board)
@@ -136,7 +140,9 @@ async def create_quest(
         estimated_time=estimated_time,
         community_benefit=community_benefit,
         created_by=created_by,
-        assigned_to=assigned_to
+        assigned_to=assigned_to,
+        location_name=location_name,  # NEW
+        location_address=location_address  # NEW
     )
     
     db.add(quest)

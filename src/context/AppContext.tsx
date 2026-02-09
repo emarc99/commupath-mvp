@@ -49,32 +49,32 @@ interface AppState {
 const AppContext = createContext<AppState | undefined>(undefined);
 
 // Mock quests
-const mockQuests: Quest[] = [
-    {
-        quest_id: '1',
-        title: 'Clean Up Bodija Park',
-        description: 'Organize a community cleanup of Bodija Park. Collect litter, trim overgrown bushes, and restore the playground area.',
-        difficulty: 'Medium',
-        impact_metric: 'Clean 500 sq meters of public space',
-        location: { lat: 7.4336, lng: 3.9057 },
-        status: 'Active',
-        category: 'Environment',
-        estimated_time: '3 hours',
-        community_benefit: 'Improved recreational space for 200+ families',
-    },
-    {
-        quest_id: '2',
-        title: 'Tutor Students at Agbowo',
-        description: 'Provide free math tutoring to secondary school students in Agbowo community.',
-        difficulty: 'Easy',
-        impact_metric: 'Tutor 10 students',
-        location: { lat: 7.4453, lng: 3.9167 },
-        status: 'In Progress',
-        category: 'Education',
-        estimated_time: '2 hours/week',
-        community_benefit: 'Improved academic performance for local youth',
-    },
-];
+// const mockQuests: Quest[] = [
+//     {
+//         quest_id: '1',
+//         title: 'Clean Up Bodija Park',
+//         description: 'Organize a community cleanup of Bodija Park. Collect litter, trim overgrown bushes, and restore the playground area.',
+//         difficulty: 'Medium',
+//         impact_metric: 'Clean 500 sq meters of public space',
+//         location: { lat: 7.4336, lng: 3.9057 },
+//         status: 'Active',
+//         category: 'Environment',
+//         estimated_time: '3 hours',
+//         community_benefit: 'Improved recreational space for 200+ families',
+//     },
+//     {
+//         quest_id: '2',
+//         title: 'Tutor Students at Agbowo',
+//         description: 'Provide free math tutoring to secondary school students in Agbowo community.',
+//         difficulty: 'Easy',
+//         impact_metric: 'Tutor 10 students',
+//         location: { lat: 7.4453, lng: 3.9167 },
+//         status: 'In Progress',
+//         category: 'Education',
+//         estimated_time: '2 hours/week',
+//         community_benefit: 'Improved academic performance for local youth',
+//     },
+// ];
 
 const mockLeaderboard: LeaderboardEntry[] = [
     { rank: 1, username: 'EcoWarrior2024', points: 1250, completedQuests: 25, impactLevel: 'Legend' },
@@ -92,7 +92,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         completedQuests: 7,
         impactLevel: 'Rising Star',
     });
-    const [quests, setQuests] = useState<Quest[]>(mockQuests);
+    // const [quests, setQuests] = useState<Quest[]>(mockQuests);
+    const [quests, setQuests] = useState<Quest[]>([]);
     const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>(mockLeaderboard);
 
     // Sync with auth user when they log in

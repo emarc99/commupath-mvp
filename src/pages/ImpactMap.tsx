@@ -1,49 +1,68 @@
-import { useState, useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
-import { Icon } from 'leaflet';
-import { MagnifyingGlassIcon, SparklesIcon, GlobeAltIcon } from '@heroicons/react/24/outline';
+import { useState, useEffect, useCallback } from 'react';
+import { GoogleMap, useJsApiLoader, Marker, InfoWindow } from '@react-google-maps/api';
+import { MagnifyingGlassIcon, SparklesIcon, MapIcon, GlobeAltIcon } from '@heroicons/react/24/outline';
 import { toast } from 'sonner';
 import { useApp } from '../context/AppContext';
 import { apiClient } from '../context/AuthContext';
 import type { Quest } from '../context/AppContext';
 
-// Custom marker icon
-const questIcon = new Icon({
-    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-violet.png',
-    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-    iconSize: [25, 41],
-    iconAnchor: [12, 41],
-    popupAnchor: [1, -34],
-    shadowSize: [41, 41]
-});
+const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
-// Component to change map view
-function ChangeView({ center }: { center: [number, number] }) {
-    const map = useMap();
-    map.setView(center, 13);
-    return null;
-}
+// Map container style
+const mapContainerStyle = {
+    width: '100%',
+    height: '100%'
+};
+
+// Default center (Ibadan, Nigeria)
+const defaultCenter = {
+    lat: 7.3775,
+    lng: 3.9470
+};
 
 const ImpactMap = () => {
     const { quests, addQuest } = useApp();
-    const [center, setCenter] = useState<[number, number]>([7.3775, 3.9470]); // Ibadan
+
+    // Load Google Maps script
+    const { isLoaded, loadError } = useJsApiLoader({
+        googleMapsApiKey: GOOGLE_MAPS_API_KEY,
+        id: 'google-map-script'
+    });
+
+    const [center, setCenter] = useState(defaultCenter);
     const [selectedCategory, setSelectedCategory] = useState<string>('Environment');
-    const [makePublic, setMakePublic] = useState<boolean>(false);
     const [isGenerating, setIsGenerating] = useState(false);
-    const [locationSearch, setLocationSearch] = useState('');
     const [apiQuests, setApiQuests] = useState<Quest[]>([]);
+    const [map, setMap] = useState<google.maps.Map | null>(null);
+    const [selectedQuest, setSelectedQuest] = useState<Quest | null>(null);
+    const [clickedPosition, setClickedPosition] = useState<{ lat: number; lng: number } | null>(null);
 
-    const categories = ['Environment', 'Social', 'Education', 'Health'];
+    // Map options for better styling (defined as function to avoid google namespace issues)
+    const getMapOptions = useCallback(() => ({
+        disableDefaultUI: false,
+        zoomControl: true,
+        mapTypeControl: true,
+        mapTypeControlOptions: {
+            style: window.google?.maps?.MapTypeControlStyle?.DROPDOWN_MENU,
+            position: window.google?.maps?.ControlPosition?.TOP_RIGHT,
+            mapTypeIds: ['roadmap', 'satellite', 'hybrid', 'terrain']
+        },
+        scaleControl: true,
+        streetViewControl: true,
+        fullscreenControl: true,
+        styles: [
+            {
+                featureType: 'poi.business',
+                stylers: [{ visibility: 'on' }]
+            }
+        ]
+    }), []);
 
-    // Fetch ALL quests from all users for community map
+    // Fetch ALL quests from all users
     useEffect(() => {
         const fetchQuests = async () => {
             try {
-                // Fetch ALL quests from all users (public + private)
-                // Note: Seeing a quest doesn't mean you can claim it!
-                // Only public quests (assigned_to=NULL) can be claimed
                 const response = await apiClient.get('/api/quests/all');
-
                 setApiQuests(response.data);
             } catch (error) {
                 console.error('Error fetching quests:', error);
@@ -53,257 +72,349 @@ const ImpactMap = () => {
         fetchQuests();
     }, []);
 
-    // Combine AppContext quests (newly generated) with API quests (from database)
-    // Remove duplicates based on quest_id
-    const questMap = new Map();
-    [...quests, ...apiQuests].forEach(quest => {
-        questMap.set(quest.quest_id, quest);
-    });
-    const allQuests = Array.from(questMap.values());
+    // Combine API and context quests
+    const allQuests = [...apiQuests, ...quests];
 
+    const handleMapClick = (event: google.maps.MapMouseEvent) => {
+        if (event.latLng) {
+            const lat = event.latLng.lat();
+            const lng = event.latLng.lng();
+            setClickedPosition({ lat, lng });
+            setCenter({ lat, lng });
+        }
+    };
 
-
-    const handleScanQuests = () => {
-        // Get user's current location
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
-                (position) => {
-                    const newCenter: [number, number] = [
-                        position.coords.latitude,
-                        position.coords.longitude
-                    ];
-                    setCenter(newCenter);
-                    toast.success('Location updated!', {
-                        description: `Lat: ${position.coords.latitude.toFixed(4)}, Lng: ${position.coords.longitude.toFixed(4)}`
-                    });
-                },
-                (error) => {
-                    console.error('Error getting location:', error);
-                    toast.warning('Unable to get your location', {
-                        description: 'Using default location (Ibadan)'
-                    });
-                }
-            );
-        } else {
-            toast.error('Geolocation not supported', {
-                description: 'Your browser doesn\'t support geolocation'
-            });
+    const handleScanArea = () => {
+        if (map) {
+            const currentCenter = map.getCenter();
+            if (currentCenter) {
+                setCenter({
+                    lat: currentCenter.lat(),
+                    lng: currentCenter.lng()
+                });
+                toast.success(`Scanning area around (${currentCenter.lat().toFixed(4)}, ${currentCenter.lng().toFixed(4)})`);
+            }
         }
     };
 
     const handleAskArchitect = async () => {
+        if (isGenerating) return;
+
         setIsGenerating(true);
+
+        // Show loading toast
         const toastId = toast.loading('Generating quest...', {
-            description: 'AI is creating a personalized community quest'
+            description: 'Community Architect is creating a personalized community quest'
         });
 
         try {
-            // Call backend API to generate quest (with authentication)
+            const mapCenter = map?.getCenter();
+            const coords = mapCenter ? { lat: mapCenter.lat(), lng: mapCenter.lng() } : center;
+
             const response = await apiClient.post('/api/generate-quest', {
-                coordinates: {
-                    lat: center[0],
-                    lng: center[1],
-                },
+                coordinates: coords,
                 resolution_category: selectedCategory,
-                user_preferences: null,
-                make_public: makePublic,
+                make_public: true
             });
 
-            const quest: Quest = response.data;
+            const newQuest = response.data;
+            addQuest(newQuest);
 
-            // Update quest status to Active
-            const questWithStatus = {
-                ...quest,
-                status: 'Active' as const,
-            };
+            // Update toast to success
+            if (newQuest.location?.name) {
+                toast.success(`✨ Quest generated at ${newQuest.location.name}!`, {
+                    id: toastId,
+                    description: 'Check the map to see your new quest marker, and go to the Community Board to claim it'
+                });
+            } else {
+                toast.success('✨ Quest generated successfully!', {
+                    id: toastId,
+                    description: 'Check the map to see your new quest marker, and go to the Community Board to claim it'
+                });
+            }
 
-            addQuest(questWithStatus);
-            // Also add to API quests so it shows immediately
-            setApiQuests(prev => [...prev, questWithStatus]);
+            // Center map on new quest
+            if (newQuest.location) {
+                setCenter({
+                    lat: newQuest.location.lat,
+                    lng: newQuest.location.lng
+                });
+            }
 
-            toast.success('Quest generated! 🎯', {
-                id: toastId,
-                description: `Check Quest Hub for "${quest.title}"`
-            });
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error generating quest:', error);
-            toast.error('Failed to generate quest', {
+            toast.error(error.response?.data?.detail || 'Failed to generate quest', {
                 id: toastId,
-                description: 'Please check your connection and try again'
+                description: 'Please try again or select a different location'
             });
         } finally {
             setIsGenerating(false);
         }
     };
 
-    const getDifficultyColor = (difficulty: string) => {
-        switch (difficulty) {
-            case 'Easy': return 'bg-green-500';
-            case 'Medium': return 'bg-yellow-500';
-            case 'Hard': return 'bg-red-500';
-            default: return 'bg-gray-500';
-        }
-    };
+    const onLoad = useCallback((map: google.maps.Map) => {
+        setMap(map);
+    }, []);
 
-    const getCategoryColor = (category: string) => {
-        switch (category) {
-            case 'Environment': return 'text-green-400';
-            case 'Social': return 'text-blue-400';
-            case 'Education': return 'text-purple-400';
-            case 'Health': return 'text-red-400';
-            default: return 'text-gray-400';
-        }
-    };
+    const onUnmount = useCallback(() => {
+        setMap(null);
+    }, []);
+
+    // Handle loading error
+    if (loadError) {
+        return (
+            <div className="flex items-center justify-center h-screen bg-dark-900">
+                <div className="text-center">
+                    <p className="text-red-500 text-xl">❌ Error loading Google Maps</p>
+                    <p className="text-gray-400 mt-2">Please check your API key and try again</p>
+                </div>
+            </div>
+        );
+    }
+
+    // Handle missing API key
+    if (!GOOGLE_MAPS_API_KEY) {
+        return (
+            <div className="flex items-center justify-center h-screen bg-dark-900">
+                <div className="text-center">
+                    <p className="text-red-500 text-xl">❌ Google Maps API key not configured</p>
+                    <p className="text-gray-400 mt-2">Please add VITE_GOOGLE_MAPS_API_KEY to your .env file</p>
+                </div>
+            </div>
+        );
+    }
+
+    // Show loading state
+    if (!isLoaded) {
+        return (
+            <div className="flex items-center justify-center h-screen bg-dark-900">
+                <div className="text-center">
+                    <div className="w-16 h-16 border-4 border-primary-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                    <p className="text-primary-400 text-lg">Loading Google Maps...</p>
+                </div>
+            </div>
+        );
+    }
 
     return (
-        <div className="h-full flex flex-col">
+        <div className="flex flex-col h-screen bg-dark-900 text-white">
             {/* Header */}
-            <div className="p-6 glass-dark border-b border-white/10 animate-slide-down">
-                <h2 className="text-3xl font-bold mb-2">📍 Impact Map</h2>
-                <p className="text-gray-400">Discover community impact quests near you</p>
+            <div className="flex items-center justify-between p-6 bg-dark-800/50 backdrop-blur-sm border-b border-white/10">
+                <div>
+                    <h1 className="text-3xl font-bold bg-gradient-to-r from-primary-400 to-accent-400 bg-clip-text text-transparent">
+                        Impact Map
+                    </h1>
+                    <p className="text-gray-400 mt-1">Discover community impact opportunities near you</p>
+                </div>
+
+                <div className="flex items-center gap-3">
+                    <span className="text-sm text-gray-400">Active Quests:</span>
+                    <span className="px-4 py-2 bg-primary-500/20 border border-primary-500/30 rounded-lg font-bold text-primary-400">
+                        {allQuests.length}
+                    </span>
+                </div>
             </div>
 
             {/* Controls */}
-            <div className="p-6 space-y-4">
-                {/* Location Search */}
-                <div className="flex space-x-4">
-                    <div className="flex-1">
-                        <label className="block text-sm font-medium mb-2 text-gray-300">
-                            Search Location
-                        </label>
-                        <div className="relative">
-                            <input
-                                type="text"
-                                value={locationSearch}
-                                onChange={(e) => setLocationSearch(e.target.value)}
-                                placeholder="e.g., Bodija, Ibadan"
-                                className="w-full px-4 py-3 pl-10 glass rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-white placeholder-gray-400"
-                            />
-                            <MagnifyingGlassIcon className="w-5 h-5 absolute left-3 top-3.5 text-gray-400" />
-                        </div>
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-medium mb-2 text-gray-300">
-                            Category
+            <div className="px-8 mb-5 py-6 bg-dark-800/30 backdrop-blur-sm border-b border-white/10">
+                <div className="flex flex-wrap items-center justify-center gap-8 max-w-6xl mx-auto">
+                    {/* Category Selector - Brutalist Style */}
+                    <div className="flex items-center gap-4 p-4 bg-dark-800/50 rounded-lg border-2 border-white/20">
+                        <label className="text-sm font-bold tracking-wider uppercase text-gray-200">
+                            CATEGORY:
                         </label>
                         <select
                             value={selectedCategory}
                             onChange={(e) => setSelectedCategory(e.target.value)}
-                            className="px-4 py-3 glass rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-white"
+                            className="brutalist-select"
                         >
-                            {categories.map(cat => (
-                                <option key={cat} value={cat} className="bg-slate-800">{cat}</option>
-                            ))}
+                            <option value="Environment">🌿 ENVIRONMENT</option>
+                            <option value="Education">📚 EDUCATION</option>
+                            <option value="Health">❤️ HEALTH</option>
+                            <option value="Social">🤝 SOCIAL</option>
                         </select>
                     </div>
-                </div>
 
-                {/* Make Public Checkbox */}
-                <div className="mb-4 p-4 glass rounded-lg">
-                    <label className="flex items-center space-x-3 cursor-pointer">
-                        <input
-                            type="checkbox"
-                            checked={makePublic}
-                            onChange={(e) => setMakePublic(e.target.checked)}
-                            className="w-5 h-5 rounded border-2 border-primary-500 text-primary-500 focus:ring-2 focus:ring-primary-500 focus:ring-offset-0 bg-gray-800 cursor-pointer"
-                        />
-                        <div className="flex items-center space-x-2">
-                            <GlobeAltIcon className="w-5 h-5 text-primary-400" />
-                            <span className="font-medium text-white">Make this quest public for the community</span>
-                        </div>
-                    </label>
-                    <p className="text-sm text-gray-400 mt-2 ml-8">
-                        {makePublic
-                            ? '🌍 This quest will be available for anyone in the community to claim and complete'
-                            : '🔒 This quest will be private and assigned only to you'
-                        }
-                    </p>
-                </div>
+                    {/* Action Buttons Container */}
+                    <div className="flex gap-6 p-4 bg-dark-800/50 rounded-lg border-2 border-white/20">
+                        {/* Scan Area Button */}
+                        <button
+                            onClick={handleScanArea}
+                            className="brutalist-btn brutalist-btn-secondary group relative"
+                        >
+                            <MagnifyingGlassIcon className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                            <span className="font-bold tracking-wider">SCAN AREA</span>
+                        </button>
 
-                {/* Action Buttons */}
-                <div className="flex space-x-4">
-                    <button
-                        onClick={handleScanQuests}
-                        className="flex items-center space-x-2 px-6 py-3 bg-white/10 hover:bg-white/20 rounded-lg transition-all duration-300 glass border border-white/20"
-                    >
-                        <MagnifyingGlassIcon className="w-5 h-5" />
-                        <span className="font-medium">Scan for Quests</span>
-                    </button>
-
-                    <button
-                        onClick={handleAskArchitect}
-                        disabled={isGenerating}
-                        className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-primary-500 to-accent-500 hover:from-primary-600 hover:to-accent-600 rounded-lg transition-all duration-300 shadow-lg disabled:opacity-50"
-                    >
-                        {isGenerating ? (
-                            <>
-                                <div className="w-5 h-5 spinner" />
-                                <span className="font-medium">Generating...</span>
-                            </>
-                        ) : (
-                            <>
-                                <SparklesIcon className="w-5 h-5" />
-                                <span className="font-medium">Ask Architect for Quest</span>
-                            </>
-                        )}
-                    </button>
+                        {/* Ask Architect Button */}
+                        <button
+                            onClick={handleAskArchitect}
+                            disabled={isGenerating}
+                            className="brutalist-btn brutalist-btn-primary group relative disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {isGenerating ? (
+                                <>
+                                    <div className="w-5 h-5 spinner" />
+                                    <span className="font-bold tracking-wider">GENERATING...</span>
+                                </>
+                            ) : (
+                                <>
+                                    <SparklesIcon className="w-5 h-5 group-hover:rotate-12 transition-transform" />
+                                    <span className="font-bold tracking-wider">ASK ARCHITECT</span>
+                                </>
+                            )}
+                        </button>
+                    </div>
                 </div>
             </div>
 
             {/* Map */}
-            <div className="flex-1 p-6 pt-0">
+            <div className="flex-1 px-6 py-3">
                 <div className="h-full rounded-xl overflow-hidden shadow-2xl border border-white/10">
-                    <MapContainer
+                    <GoogleMap
+                        mapContainerStyle={mapContainerStyle}
                         center={center}
                         zoom={13}
-                        style={{ height: '100%', width: '100%' }}
-                        className="z-0"
+                        onLoad={onLoad}
+                        onUnmount={onUnmount}
+                        onClick={handleMapClick}
+                        options={getMapOptions()}
                     >
-                        <ChangeView center={center} />
-                        <TileLayer
-                            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                        />
+                        {/* Quest Markers */}
+                        {allQuests.map((quest) => (
+                            <Marker
+                                key={quest.quest_id}
+                                position={{
+                                    lat: quest.location.lat,
+                                    lng: quest.location.lng
+                                }}
+                                onClick={() => setSelectedQuest(quest)}
+                                icon={{
+                                    url: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-violet.png',
+                                    scaledSize: { width: 25, height: 41 },
+                                    anchor: { x: 12, y: 41 }
+                                }}
+                            />
+                        ))}
 
-                        {allQuests.map((quest, index) => {
-                            // Add small offset if multiple quests share same coordinates
-                            // This prevents markers from stacking on top of each other
-                            const offsetLat = (index * 0.002) - 0.007; // Spread vertically
-                            const offsetLng = ((index % 3) * 0.002) - 0.002; // Spread horizontally
+                        {/* Clicked Position Marker */}
+                        {clickedPosition && (
+                            <Marker
+                                position={clickedPosition}
+                                icon={{
+                                    url: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
+                                    scaledSize: { width: 25, height: 41 },
+                                    anchor: { x: 12, y: 41 }
+                                }}
+                            />
+                        )}
 
-                            const position: [number, number] = [
-                                quest.location.lat + offsetLat,
-                                quest.location.lng + offsetLng
-                            ];
+                        {/* Info Window for Selected Quest */}
+                        {selectedQuest && (
+                            <InfoWindow
+                                position={{
+                                    lat: selectedQuest.location.lat,
+                                    lng: selectedQuest.location.lng
+                                }}
+                                onCloseClick={() => setSelectedQuest(null)}
+                            >
+                                <div className="p-2 min-w-[250px]" style={{ color: '#1f2937' }}>
+                                    <h3 className="font-bold text-lg mb-1">{selectedQuest.title}</h3>
 
-                            return (
-                                <Marker
-                                    key={quest.quest_id}
-                                    position={position}
-                                    icon={questIcon}
-                                >
-                                    <Popup className="custom-popup">
-                                        <div className="p-2 min-w-[250px]">
-                                            <h3 className="font-bold text-lg mb-1 text-gray-800">{quest.title}</h3>
-                                            <div className="flex items-center space-x-2 mb-2">
-                                                <span className={`px-2 py-1 ${getDifficultyColor(quest.difficulty)} text-white text-xs rounded font-medium`}>
-                                                    {quest.difficulty}
-                                                </span>
-                                                <span className={`text-sm font-medium ${getCategoryColor(quest.category)}`}>
-                                                    {quest.category}
-                                                </span>
-                                            </div>
-                                            <p className="text-sm text-gray-600 mb-2">{quest.description}</p>
-                                            <p className="text-xs text-gray-500">
-                                                <strong>Impact:</strong> {quest.impact_metric}
-                                            </p>
+                                    {/* Location Name (NEW!) */}
+                                    {selectedQuest.location?.name && (
+                                        <div className="flex items-center gap-1 mb-2 text-blue-600">
+                                            <MapIcon className="w-4 h-4" />
+                                            <span className="text-sm font-medium">{selectedQuest.location.name}</span>
                                         </div>
-                                    </Popup>
-                                </Marker>
-                            );
-                        })}
-                    </MapContainer>
+                                    )}
+
+                                    <div className="flex items-center mb-1">
+                                        <span className="bg-blue-100 text-blue-800 text-xs font-medium me-2 px-2.5 py-0.5 rounded">
+                                            {selectedQuest.category}
+                                        </span>
+                                        <span className="bg-green-100 text-green-800 text-xs font-medium me-2 px-2.5 py-0.5 rounded">
+                                            {selectedQuest.difficulty}
+                                        </span>
+                                    </div>
+                                    <p className="text-sm mb-2">{selectedQuest.description}</p>
+                                    <p className="text-xs">
+                                        <strong>Impact:</strong> {selectedQuest.impact_metric}
+                                    </p>
+                                </div>
+                            </InfoWindow>
+                        )}
+                    </GoogleMap>
+                </div>
+            </div>
+
+            {/* Quick Tips Section */}
+            <div className="px-6 py-5 bg-gradient-to-r from-dark-800/50 via-dark-800/30 to-dark-800/50 backdrop-blur-sm border-t border-white/10">
+                <div className="max-w-6xl mx-auto">
+                    {/* Section Header */}
+                    <div className="flex items-center justify-center gap-2 mb-4">
+                        <div className="h-px w-12 bg-gradient-to-r from-transparent to-primary-500"></div>
+                        <h3 className="text-sm font-bold tracking-wider uppercase text-primary-400 flex items-center gap-2">
+                            <span className="text-xl">💡</span>
+                            QUICK TIPS
+                        </h3>
+                        <div className="h-px w-12 bg-gradient-to-l from-transparent to-primary-500"></div>
+                    </div>
+
+                    {/* Tips Grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 max-w-7xl mx-auto">
+                        {/* Tip 1 */}
+                        <div className="group flex items-start gap-3 p-3 rounded-lg bg-dark-700/30 border border-white/5 hover:border-cyan-500/30 hover:bg-dark-700/50 transition-all duration-300">
+                            <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500 to-cyan-600 flex items-center justify-center text-white shadow-lg group-hover:scale-110 transition-transform">
+                                <MapIcon className="w-5 h-5" />
+                            </div>
+                            <div>
+                                <p className="text-xs font-semibold text-gray-300 mb-1">Select Location</p>
+                                <p className="text-xs text-gray-500 leading-relaxed">
+                                    Click on the map to set a location, select a category from dropdown menu
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Tip 2 - Generate Quest */}
+                        <div className="group flex items-start gap-3 p-3 rounded-lg bg-dark-700/30 border border-white/5 hover:border-amber-500/30 hover:bg-dark-700/50 transition-all duration-300">
+                            <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white shadow-lg group-hover:scale-110 transition-transform">
+                                <SparklesIcon className="w-5 h-5" />
+                            </div>
+                            <div>
+                                <p className="text-xs font-semibold text-gray-300 mb-1">Generate Quest</p>
+                                <p className="text-xs text-gray-500 leading-relaxed">
+                                    Click "ASK ARCHITECT" to create a new AI-powered quest at your selected location
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Tip 3 */}
+                        <div className="group flex items-start gap-3 p-3 rounded-lg bg-dark-700/30 border border-white/5 hover:border-purple-500/30 hover:bg-dark-700/50 transition-all duration-300">
+                            <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center text-white shadow-lg group-hover:scale-110 transition-transform">
+                                <GlobeAltIcon className="w-5 h-5" />
+                            </div>
+                            <div>
+                                <p className="text-xs font-semibold text-gray-300 mb-1">View Quest Markers</p>
+                                <p className="text-xs text-gray-500 leading-relaxed">
+                                    Purple markers show existing quests from the community across the map
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Tip 4 */}
+                        <div className="group flex items-start gap-3 p-3 rounded-lg bg-dark-700/30 border border-white/5 hover:border-green-500/30 hover:bg-dark-700/50 transition-all duration-300">
+                            <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center text-white shadow-lg group-hover:scale-110 transition-transform">
+                                <MagnifyingGlassIcon className="w-5 h-5" />
+                            </div>
+                            <div>
+                                <p className="text-xs font-semibold text-gray-300 mb-1">Toggle Map Views</p>
+                                <p className="text-xs text-gray-500 leading-relaxed">
+                                    Switch between roadmap, satellite, hybrid, and terrain views using controls
+                                </p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

@@ -25,13 +25,15 @@ class QuestRequest(BaseModel):
     coordinates: Coordinates
     resolution_category: ResolutionCategory
     user_preferences: Optional[str] = Field(None, description="Optional user preferences or constraints")
+    make_public: bool = Field(False, description="If True, quest is public for community; if False, assigned to creator")
 
     class Config:
         json_schema_extra = {
             "example": {
                 "coordinates": {"lat": 7.3775, "lng": 3.9470},
                 "resolution_category": "Environment",
-                "user_preferences": "I prefer outdoor activities and have weekends free"
+                "user_preferences": "I prefer outdoor activities and have weekends free",
+                "make_public": False
             }
         }
 

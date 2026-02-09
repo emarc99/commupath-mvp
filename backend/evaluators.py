@@ -13,7 +13,7 @@ class SafetyEvaluator(base_metric.BaseMetric):
     def __init__(self, name: str = "safety_evaluator"):
         super().__init__(name=name)
         self.client = genai.Client()
-        self.model = "gemini-2.0-flash-exp"
+        self.model = "gemini-2.5-pro"
     
     def score(self, output: str, **kwargs) -> score_result.ScoreResult:
         """
@@ -94,7 +94,7 @@ class AppropriatenessEvaluator(base_metric.BaseMetric):
     def __init__(self, name: str = "appropriateness_evaluator"):
         super().__init__(name=name)
         self.client = genai.Client()
-        self.model = "gemini-2.0-flash-exp"
+        self.model = "gemini-2.5-pro"
     
     def score(self, output: str, **kwargs) -> score_result.ScoreResult:
         """Evaluate quest appropriateness"""

@@ -2,47 +2,60 @@
 
 **Geo-Social AI Agent Platform for Community Impact**
 
-CommuPath transforms New Year's resolutions into collective community impact through AI-coordinated local quests.
+CommuPath transforms New Year's resolutions into collective community impact through AI-coordinated local quests, powered by the Stellar Blockchain.
 
 ![CommuPath Banner](./src/assets/commup3.png)
 
 ## 🎯 Project Vision
 
 CommuPath uses AI agents to:
-- 🎯 Identify local community needs based on GPS coordinates
-- 📍 Generate location-specific "Impact Quests"
-- 👁️ Verify completion through multimodal reasoning (images + text)
-- 🏆 Gamify community engagement with leaderboards and points
+- 🎯 **Identify** local community needs based on GPS coordinates
+- 📍 **Generate** location-specific **Impact Quests** (e.g., Mapo Hall cleanup, UI campus maths. mentoring)
+- 👁️ **Verify** completion through multimodal reasoning (images + text + videos) via Gemini
+- ⛓️ **Settle** rewards instantly and transparently using Stellar & Soroban smart contracts
+- 🏆 **Gamify** community engagement with on-chain leaderboards and verifiable impact badges
 
 ## 🏗️ Tech Stack
 
-### Frontend
+### Frontend & AI
 - **React 18** + **TypeScript** - Type-safe UI components
 - **Vite** - Lightning-fast build tool
-- **Tailwind CSS** - Utility-first styling with custom design system
-- **React Router** - Client-side routing
-- **React Leaflet** - Interactive maps for geospatial visualization
-- **Heroicons** - Beautiful SVG icons
-- **Shadcn UI** - Modern, accessible UI components
+- **Google Gemini  2.5 Pro/Flash** - Advanced reasoning, vision, and fast evaluations
+- **Opik SDK** - LLM observability and agent tracing.
 
-### Backend (Coming in Milestones 1-4)
+### Blockchain
+- **Soroban (Rust)** - Smart contracts for quest state management and reward distribution
+- **Stellar SDK** - For seamless wallet integration and sub-cent transaction settlements
+- **Stellar Aid Assist Logic** - Utilizing Stellar's proven architecture for transparent, real-world social impact
+
+### Backend
 - **FastAPI** - Modern Python web framework
-- **Google Gemini 2.5 Pro** - Advanced reasoning and vision
-- **Google Gemini 2.5 Flash** - Fast evaluations
-- **Opik SDK** - LLM observability and tracing
-- **SQLAlchemy** - ORM for database management
+- **SQLAlchemy** - ORM for local data persistence
+- **Supabase** - Remote open-source Backend-as-a-Service (BaaS) platform built on top of PostgreSQL
+
+## 🌊 Drips Wave Integration
+CommuPath is participating in the **Stellar Wave Program** on Drips to accelerate development.
+
+### For Contributors:
+
+1. Check our (Issues)[https://github.com/emarc99/commupath-mvp/issues] for tags like `Stellar-Wave`.
+2. Follow the "Fix, Merge, and Earn" cycle.
+3. Earn Points for your contributions, which translate into **USDC rewards on Stellar** via the Drips Wave protocol.
 
 ## 🚀 Getting Started
 
 ### Prerequisites
 - Node.js 18+ 
 - npm or yarn
-- Python 3.9+ (for backend - Milestones 1+)
+- Python 3.9+
+- Stellar CLI (for Soroban contract deployment)
+- Freighter Wallet (to interact with the MVP)
 
 ### Installation
 
 1. **Clone the repository**
    ```bash
+   git clone https://github.com/emarc99/commupath-mvp
    cd commupath
    ```
 
@@ -51,13 +64,16 @@ CommuPath uses AI agents to:
    npm install
    ```
 
-3. **Run the development server**
+3. **Deploy Soroban Contracts (Local Testnet)**
+```bash
+cd contracts
+soroban contract deploy --wasm target/wasm32-unknown-unknown/release/commupath.wasm --source alice --network testnet
+```
+
+4. **Run the development server**
    ```bash
    npm run dev
    ```
-
-4. **Open in browser**
-   Navigate to [http://localhost:5173](http://localhost:5173)
 
 ## 📖 Project Structure
 
@@ -75,7 +91,8 @@ commupath/
 │   ├── App.tsx                 # Main app with routing
 │   ├── main.tsx                # Entry point
 │   └── index.css               # Global styles
-├── backend/                    # Coming in Milestone 1
+├── backend/                    # Pyhton-based backend
+├── soroban/                    # Soroban smart contracts/scripts
 ├── vite.config.ts              # Vite configuration
 ├── tailwind.config.js          # Tailwind customization
 └── package.json
@@ -84,53 +101,45 @@ commupath/
 ## 🎮 Features (Milestone 0 - UI Scaffolding) ✅
 
 ### 📍 Impact Map
-- Interactive Leaflet map centered on Ibadan, Nigeria
+- Interactive Google map centered on a location e.g. Ibadan, Nigeria
 - Quest markers showing community impact opportunities
 - Location search and category filtering (Environment, Social, Education, Health)
-- "Scan for Quests" button using browser geolocation API
-- "Ask Architect for Quest" placeholder (will connect to Gemini in Milestone 1)
+- Ask Architect for Quest: will connect to Gemini and personally relevant quests
+- On-Chain Quests: Markers represent live smart contract instances
+- Scan for Quests: Uses browser geolocation to find Soroban-verified impact opportunities near you.
 
 ### 📋 Quest Hub
-- Tabbed interface: Active, In Progress, Completed quests
-- Beautiful quest cards with difficulty badges
-- File upload for proof submission (drag-and-drop support)
-- Image preview before submission
-- Modal interface for submitting proof of impact
+- Tabbed interface: `Active`, `In Progress`, `Completed quests`
+- Quest cards with difficulty badges
+- Proof of Impact: Upload images/videos for Gemini-vision verification
+- Smart Settlement: Once AI verifies the proof, a Soroban contract automatically triggers a reward payout to your Stellar address.
 
 ### 🏆 Leaderboard
 - Top community heroes ranked by points
 - Global impact summary (total points, quests, heroes)
-- Weekly impact story (AI-generated in Milestone 4)
-- Award badges for top 3 performers (🥇🥈🥉)
-- Animated table with smooth transitions
+- Weekly impact story (AI-generated)
+- Verifiable Heroes: Rankings are pulled directly from the Stellar ledger
+- Impact Badges: Top performers receive soulbound tokens (NFTs) on Stellar representing their community contributions
 
 ![CommuPath Logo](./src/assets/commup2.png)
 
 ## 🛠️ Development Roadmap
 
-### ✅ Milestone 0: UI Scaffolding (In progress)
-- React + Vite + Tailwind CSS setup
-- Three main pages with premium design
-- Mock data and state management
-- Interactive maps with React Leaflet
+### ✅ Milestone 0: UI Scaffolding
+- React + Vite + Tailwind setup
+- Interactive maps with Google Maps JS API
 
-### 🔄 Milestone 1: The Architect Core (In progress)
-- FastAPI backend setup
-- Gemini 2.5 Pro integration
-- Quest generation API
-- Connect frontend to backend
+### 🔄 Milestone 1: The Architect & Soroban Core (In progress)
+- FastAPI + Gemini 2.5 Pro for quest generation (Quest generation API)
+- Soroban Smart Contract deployment for Quest state (`Active`/`Completed`/`Verified`)
 
-### 📊 Milestone 2: Opik Instrumentation (In progress)
-- Opik SDK integration
-- `@track` decorators for tracing
-- LLM-as-a-judge for safety evaluation
-- Observability dashboard
+### 📊 Milestone 2: Opik & Stellar Observability
+- Opik SDK integration for tracing agent calls
+- Integration of Stellar Horizon for monitoring on-chain quest completions
 
-### 👁️ Milestone 3: Multimodal Verification (Next)
-- Gemini 2.5 Pro Vision integration
-- Image-based proof verification
-- Confidence scoring
-- Point awarding system
+### 👁️ Milestone 3: Multimodal Verification
+- Gemini 2.5/3.0 Pro Vision for image-based proof
+- Auto-triggering Stellar transactions upon successful AI verification.
 
 ### 🗄️ Milestone 4: Persistence & Reporting
 - SQLAlchemy database setup
@@ -189,13 +198,10 @@ Contributions, suggestions, and feedback are always welcomee!
 
 ## 📄 License
 
-MIT License - Built with ❤️ for community impact
+MIT License - Built with ❤️ for community impacts
 
 ## 🙏 Acknowledgments
 
-- **Google Gemini** - For powerful AI capabilities
-- **Comet.ml (Opik)** - For LLM observability tools
-- **OpenStreetMap** - For mapping data
 
 ---
 
